@@ -1,0 +1,8 @@
+{
+  "name": "AutS",
+  "description": "一个沉浸式的天文探索与学习平台，带你领略宇宙的奥秘。",
+  "requestFramePermissions": [
+    "geolocation",
+    "camera"
+  ]
+}

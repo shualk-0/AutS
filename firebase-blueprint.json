@@ -1,0 +1,79 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "User Profile",
+      "description": "Stores user information, points, and progress.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Firebase Auth UID" },
+        "displayName": { "type": "string" },
+        "email": { "type": "string" },
+        "points": { "type": "integer" },
+        "level": { "type": "integer" },
+        "completedChapters": { "type": "array", "items": { "type": "string" } },
+        "achievements": { "type": "array", "items": { "type": "string" } },
+        "streak": { "type": "integer" },
+        "lastLogin": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "points", "level"]
+    },
+    "Course": {
+      "title": "Course",
+      "description": "Astronomy course content.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "level": { "type": "integer" },
+        "description": { "type": "string" },
+        "chapters": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "title": { "type": "string" },
+              "content": { "type": "string" },
+              "quiz": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "question": { "type": "string" },
+                    "options": { "type": "array", "items": { "type": "string" } },
+                    "correctIndex": { "type": "integer" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "ChatMessage": {
+      "title": "Chat Message",
+      "description": "Messages between user and AI tutor.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "role": { "type": "string", "enum": ["user", "model"] },
+        "text": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      }
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profile documents"
+    },
+    "/courses/{courseId}": {
+      "schema": "Course",
+      "description": "Astronomy courses"
+    },
+    "/users/{userId}/chatHistory/{messageId}": {
+      "schema": "ChatMessage",
+      "description": "User's chat history with AI"
+    }
+  }
+}
