@@ -20,6 +20,7 @@ import {
   RefreshCw,
   Volume2,
   Square,
+  FileText,
   Play,
   History,
   X
@@ -48,15 +49,33 @@ interface ObservationData {
   transparency: number; // 1-5
 }
 
-const MOCK_DATA: ObservationData[] = [
-  { date: '今日', cloudCover: 15, bortleScale: 4, moonPhase: 0.1, humidity: 45, windSpeed: 12, seeing: 4, transparency: 4 },
-  { date: '周三', cloudCover: 40, bortleScale: 4, moonPhase: 0.2, humidity: 55, windSpeed: 18, seeing: 3, transparency: 3 },
-  { date: '周四', cloudCover: 85, bortleScale: 4, moonPhase: 0.3, humidity: 75, windSpeed: 25, seeing: 1, transparency: 2 },
-  { date: '周五', cloudCover: 10, bortleScale: 4, moonPhase: 0.4, humidity: 40, windSpeed: 8, seeing: 5, transparency: 5 },
-  { date: '周六', cloudCover: 5, bortleScale: 4, moonPhase: 0.5, humidity: 35, windSpeed: 5, seeing: 5, transparency: 5 },
-  { date: '周日', cloudCover: 25, bortleScale: 4, moonPhase: 0.6, humidity: 50, windSpeed: 15, seeing: 4, transparency: 4 },
-  { date: '周一', cloudCover: 60, bortleScale: 4, moonPhase: 0.7, humidity: 65, windSpeed: 20, seeing: 2, transparency: 3 },
+const WEEK_DAYS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+
+const BASE_DATA: Omit<ObservationData, 'date'>[] = [
+  { cloudCover: 15, bortleScale: 4, moonPhase: 0.1, humidity: 45, windSpeed: 12, seeing: 4, transparency: 4 },
+  { cloudCover: 40, bortleScale: 4, moonPhase: 0.2, humidity: 55, windSpeed: 18, seeing: 3, transparency: 3 },
+  { cloudCover: 85, bortleScale: 4, moonPhase: 0.3, humidity: 75, windSpeed: 25, seeing: 1, transparency: 2 },
+  { cloudCover: 10, bortleScale: 4, moonPhase: 0.4, humidity: 40, windSpeed: 8, seeing: 5, transparency: 5 },
+  { cloudCover: 5, bortleScale: 4, moonPhase: 0.5, humidity: 35, windSpeed: 5, seeing: 5, transparency: 5 },
+  { cloudCover: 25, bortleScale: 4, moonPhase: 0.6, humidity: 50, windSpeed: 15, seeing: 4, transparency: 4 },
+  { cloudCover: 60, bortleScale: 4, moonPhase: 0.7, humidity: 65, windSpeed: 20, seeing: 2, transparency: 3 },
 ];
+
+const generateMockData = (): ObservationData[] => {
+  const today = new Date();
+
+  return BASE_DATA.map((item, index) => {
+    const d = new Date(today);
+    d.setDate(today.getDate() + index);
+
+    return {
+      ...item,
+      date: index === 0 ? '今日' : WEEK_DAYS[d.getDay()]
+    };
+  });
+};
+
+const MOCK_DATA: ObservationData[] = generateMockData();
 
 const calculateScore = (data: ObservationData) => {
   // Weights: Cloud 40%, Bortle 30%, Moon 20%, Other 10%
@@ -76,6 +95,146 @@ const DEEPSEEK_CONFIG = {
   model: "ep-20260405155245-wnxh7"
 };
 
+const hashCityToSeed = (city: string) => {
+  let hash = 0;
+  for (let i = 0; i < city.length; i++) {
+    hash = city.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return Math.abs(hash);
+};
+
+const createSeededRandom = (seed: number) => {
+  let value = seed % 2147483647;
+  if (value <= 0) value += 2147483646;
+
+  return () => {
+    value = (value * 16807) % 2147483647;
+    return (value - 1) / 2147483646;
+  };
+};
+
+const getCityLevel = (city: string) => {
+  if (
+    city.includes('上海') ||
+    city.includes('北京') ||
+    city.includes('广州') ||
+    city.includes('深圳')
+  ) {
+    return 'mega';
+  }
+
+  if (
+    city.includes('杭州') ||
+    city.includes('成都') ||
+    city.includes('西安') ||
+    city.includes('南京') ||
+    city.includes('武汉') ||
+    city.includes('重庆')
+  ) {
+    return 'large';
+  }
+
+  if (
+    city.includes('拉萨') ||
+    city.includes('乌鲁木齐') ||
+    city.includes('香格里拉') ||
+    city.includes('丽江') ||
+    city.includes('大理') ||
+    city.includes('阿里')
+  ) {
+    return 'excellent';
+  }
+
+  return 'normal';
+};
+
+const generateObservationDataByCity = (city: string): ObservationData => {
+  const seed = hashCityToSeed(city);
+  const random = createSeededRandom(seed);
+  const level = getCityLevel(city);
+
+  let bortleScale = 4;
+  let cloudBase = 35;
+  let humidityBase = 50;
+  let transparencyBase = 3;
+  let seeingBase = 3;
+  let windBase = 10;
+
+  if (level === 'mega') {
+    bortleScale = 7 + Math.floor(random() * 2); // 7-8
+    cloudBase = 45;
+    humidityBase = 60;
+    transparencyBase = 2;
+    seeingBase = 2;
+    windBase = 12;
+  } else if (level === 'large') {
+    bortleScale = 5 + Math.floor(random() * 2); // 5-6
+    cloudBase = 35;
+    humidityBase = 55;
+    transparencyBase = 3;
+    seeingBase = 3;
+    windBase = 10;
+  } else if (level === 'excellent') {
+    bortleScale = 2 + Math.floor(random() * 2); // 2-3
+    cloudBase = 18;
+    humidityBase = 35;
+    transparencyBase = 4;
+    seeingBase = 4;
+    windBase = 8;
+  } else {
+    bortleScale = 4 + Math.floor(random() * 2); // 4-5
+    cloudBase = 30;
+    humidityBase = 45;
+    transparencyBase = 3;
+    seeingBase = 3;
+    windBase = 9;
+  }
+
+  const cloudCover = Math.min(95, Math.max(5, Math.floor(cloudBase + random() * 30 - 10)));
+  const humidity = Math.min(95, Math.max(20, Math.floor(humidityBase + random() * 25 - 8)));
+  const windSpeed = Math.min(30, Math.max(2, Math.floor(windBase + random() * 10 - 3)));
+  const moonPhase = Number((random() * 0.9).toFixed(1));
+  const transparency = Math.min(5, Math.max(1, transparencyBase + Math.floor(random() * 2)));
+  const seeing = Math.min(5, Math.max(1, seeingBase + Math.floor(random() * 2) - 1));
+
+  return {
+    ...MOCK_DATA[0],
+    cloudCover,
+    bortleScale,
+    moonPhase,
+    humidity,
+    windSpeed,
+    transparency,
+    seeing
+  };
+};
+
+const generateTrendDataByCity = (city: string): ObservationData[] => {
+  const base = generateObservationDataByCity(city);
+  const days = generateMockData();
+  const seed = hashCityToSeed(city + '-trend');
+  const random = createSeededRandom(seed);
+
+  return days.map((day, index) => {
+    const cloudOffset = Math.floor(random() * 20 - 10) + index * 2 - 4;
+    const humidityOffset = Math.floor(random() * 16 - 8) + index - 3;
+    const windOffset = Math.floor(random() * 8 - 4);
+    const seeingOffset = Math.floor(random() * 3) - 1;
+    const transparencyOffset = Math.floor(random() * 3) - 1;
+
+    return {
+      ...day,
+      cloudCover: Math.min(95, Math.max(5, base.cloudCover + cloudOffset)),
+      bortleScale: base.bortleScale,
+      moonPhase: day.moonPhase,
+      humidity: Math.min(95, Math.max(20, base.humidity + humidityOffset)),
+      windSpeed: Math.min(30, Math.max(2, base.windSpeed + windOffset)),
+      transparency: Math.min(5, Math.max(1, base.transparency + transparencyOffset)),
+      seeing: Math.min(5, Math.max(1, base.seeing + seeingOffset)),
+    };
+  });
+};
+
 const DailyAstronomyFact: React.FC<{ data: ObservationData, location: string }> = ({ data, location }) => {
   const [fact, setFact] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -83,8 +242,11 @@ const DailyAstronomyFact: React.FC<{ data: ObservationData, location: string }> 
   useEffect(() => {
     const fetchFact = async () => {
       const today = new Date().toDateString();
-      const cached = localStorage.getItem('daily_astro_fact');
-      const cachedDate = localStorage.getItem('daily_astro_fact_date');
+      const factCacheKey = `daily_astro_fact_${location}`;
+      const factDateKey = `daily_astro_fact_date_${location}`;
+
+      const cached = localStorage.getItem(factCacheKey);
+      const cachedDate = localStorage.getItem(factDateKey);
 
       if (cached && cachedDate === today) {
         setFact(cached);
@@ -121,9 +283,9 @@ const DailyAstronomyFact: React.FC<{ data: ObservationData, location: string }> 
           const newFact = result.choices?.[0]?.message?.content;
           if (newFact) {
             setFact(newFact);
-            localStorage.setItem('daily_astro_fact', newFact);
-            localStorage.setItem('daily_astro_fact_date', today);
-          }
+            localStorage.setItem(factCacheKey, newFact);
+            localStorage.setItem(factDateKey, today);
+        }
         }
       } catch (error) {
         console.error('Failed to fetch daily fact:', error);
@@ -165,27 +327,29 @@ const DailyAstronomyFact: React.FC<{ data: ObservationData, location: string }> 
 };
 
 const AudioSkyTour: React.FC<{ data: ObservationData, location: string }> = ({ data, location }) => {
-  const [isPlaying, setIsPlaying] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [tourText, setTourText] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState(false);
 
   const startTour = async () => {
-    if (isPlaying) {
-      window.location.reload(); 
+    if (expanded && tourText) {
+      setExpanded(false);
       return;
     }
 
     setLoading(true);
     try {
-      const prompt = `你是一位富有诗意的天文学导师。请根据以下观测条件，为用户生成一段约150字的“星空导览”语音脚本。
-      
-      观测地点：${location}
-      当前条件：云量 ${data.cloudCover}%，视宁度 ${data.seeing}/5，透明度 ${data.transparency}/5，月相照明度 ${Math.round(data.moonPhase * 100)}%。
-      
-      要求：
-      1. 语气亲切、深邃、富有感染力。
-      2. 引导用户观察当前的星空（例如：如果晴朗，引导看银河；如果多云，引导感受宇宙的宁静）。
-      3. 结尾要有一句鼓励探索的话。
-      4. 请务必使用中文。`;
+      const prompt = `你是一位富有诗意的天文学导师。请根据以下观测条件，为用户生成一段约150字的“星空导览”文字内容。
+
+观测地点：${location}
+当前条件：云量 ${data.cloudCover}%，视宁度 ${data.seeing}/5，透明度 ${data.transparency}/5，月相照明度 ${Math.round(data.moonPhase * 100)}%。
+
+要求：
+1. 语气亲切、深邃、富有感染力。
+2. 引导用户观察当前的星空（例如：如果晴朗，引导看银河；如果多云，引导感受宇宙的宁静）。
+3. 结尾要有一句鼓励探索的话。
+4. 请务必使用中文。
+5. 控制在120-180字之间。`;
 
       const scriptResponse = await fetch(`${DEEPSEEK_CONFIG.base_url}/chat/completions`, {
         method: 'POST',
@@ -199,62 +363,80 @@ const AudioSkyTour: React.FC<{ data: ObservationData, location: string }> = ({ d
         })
       });
 
-      if (!scriptResponse.ok) throw new Error('脚本生成失败');
+      if (!scriptResponse.ok) throw new Error('导览生成失败');
+
       const scriptData = await scriptResponse.json();
-      const script = scriptData.choices?.[0]?.message?.content;
+      const script = scriptData.choices?.[0]?.message?.content?.trim();
 
-      if (!script) throw new Error('未获取到脚本内容');
+      if (!script) throw new Error('未获取到导览内容');
 
-      // Use browser SpeechSynthesis as a fallback for AI TTS
-      const utterance = new SpeechSynthesisUtterance(script);
-      utterance.lang = 'zh-CN';
-      utterance.rate = 0.9;
-      utterance.onend = () => setIsPlaying(false);
-      utterance.onerror = () => setIsPlaying(false);
-      
-      window.speechSynthesis.cancel(); // Cancel any ongoing speech
-      window.speechSynthesis.speak(utterance);
-      setIsPlaying(true);
-
+      setTourText(script);
+      setExpanded(true);
     } catch (error) {
-      console.error('Audio Tour Error:', error);
-      alert('语音导览暂时无法启动，请检查 API Key 设置。');
+      console.error('Sky Tour Error:', error);
+      setTourText('暂时无法生成星空导览，请检查网络或 API 配置后重试。');
+      setExpanded(true);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="glass-panel p-6 rounded-3xl border-white/10 bg-white/5 flex items-center justify-between gap-6">
-      <div className="flex items-center gap-4">
-        <div className="w-12 h-12 rounded-2xl bg-cosmic-neon/10 flex items-center justify-center">
-          <Volume2 className="w-6 h-6 text-cosmic-neon" />
+    <div className="glass-panel p-6 rounded-3xl border-white/10 bg-white/5 flex flex-col gap-5">
+      <div className="flex items-center justify-between gap-6 flex-wrap">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 rounded-2xl bg-cosmic-neon/10 flex items-center justify-center">
+            <FileText className="w-6 h-6 text-cosmic-neon" />
+          </div>
+          <div>
+            <h4 className="text-white font-bold">AI 星空导览</h4>
+            <p className="text-slate-400 text-xs">手机环境更稳定的文字导览版本</p>
+          </div>
         </div>
-        <div>
-          <h4 className="text-white font-bold">AI 语音星空导览</h4>
-          <p className="text-slate-400 text-xs">闭上眼睛，聆听宇宙的低语</p>
-        </div>
+
+        <button
+          onClick={startTour}
+          disabled={loading}
+          className={cn(
+            "px-6 py-3 rounded-2xl font-bold text-sm transition-all flex items-center gap-2",
+            expanded && tourText
+              ? "bg-white/5 text-slate-300 border border-white/10"
+              : "bg-cosmic-neon text-cosmic-bg hover:scale-105 active:scale-95"
+          )}
+        >
+          {loading ? (
+            <RefreshCw className="w-4 h-4 animate-spin" />
+          ) : (
+            <Play className="w-4 h-4 fill-current" />
+          )}
+          {loading ? '生成中...' : expanded && tourText ? '收起导览' : '开始导览'}
+        </button>
       </div>
-      
-      <button 
-        onClick={startTour}
-        disabled={loading}
-        className={cn(
-          "px-6 py-3 rounded-2xl font-bold text-sm transition-all flex items-center gap-2",
-          isPlaying 
-            ? "bg-red-500/20 text-red-400 border border-red-500/30" 
-            : "bg-cosmic-neon text-cosmic-bg hover:scale-105 active:scale-95"
+
+      <AnimatePresence>
+        {expanded && (
+          <motion.div
+            initial={{ opacity: 0, y: 14 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 14 }}
+            className="rounded-2xl border border-cosmic-neon/20 bg-cosmic-neon/5 p-5"
+          >
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-xl bg-cosmic-neon/15 flex items-center justify-center flex-shrink-0">
+                <Volume2 className="w-5 h-5 text-cosmic-neon" />
+              </div>
+              <div className="space-y-2">
+                <h5 className="text-sm font-bold text-cosmic-neon tracking-widest uppercase">
+                  本次星空导览
+                </h5>
+                <p className="text-slate-300 text-sm leading-7 whitespace-pre-line">
+                  {tourText || '正在为你整理今晚的星空建议...'}
+                </p>
+              </div>
+            </div>
+          </motion.div>
         )}
-      >
-        {loading ? (
-          <RefreshCw className="w-4 h-4 animate-spin" />
-        ) : isPlaying ? (
-          <Square className="w-4 h-4 fill-current" />
-        ) : (
-          <Play className="w-4 h-4 fill-current" />
-        )}
-        {loading ? '准备中...' : isPlaying ? '停止导览' : '开始导览'}
-      </button>
+      </AnimatePresence>
     </div>
   );
 };
@@ -286,68 +468,89 @@ const Guide: React.FC = () => {
 
   const handleAutoLocate = () => {
     setIsLocating(true);
-    
-    if ("geolocation" in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        async (position) => {
-          const { latitude, longitude } = position.coords;
-          try {
-            // Using Nominatim (OpenStreetMap) for free reverse geocoding
-            const response = await fetch(
-              `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=10&addressdetails=1`,
-              {
-                headers: {
-                  'Accept-Language': 'zh-CN,zh;q=0.9',
-                  'User-Agent': 'AstronomyApp/1.0'
-                }
-              }
-            );
-            
-            if (!response.ok) throw new Error('Network response was not ok');
-            
-            const data = await response.json();
-            const city = data.address.city || data.address.town || data.address.village || data.address.county || data.address.state || "未知地点";
-            
-            handleCitySelect(city);
-          } catch (error) {
-            console.error("Geocoding failed", error);
-            handleCitySelect(`经纬度: ${latitude.toFixed(2)}, ${longitude.toFixed(2)}`);
-          } finally {
-            setIsLocating(false);
+
+  if (!navigator.geolocation) {
+    alert("您的设备不支持定位，请手动选择城市");
+    setIsLocating(false);
+    setShowCityPicker(true);
+    return;
+  }
+
+  navigator.geolocation.getCurrentPosition(
+    async (position) => {
+      const { latitude, longitude, accuracy } = position.coords;
+      console.log("定位成功:", latitude, longitude, "精度:", accuracy);
+
+      try {
+        const response = await fetch(
+          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=10&addressdetails=1`,
+          {
+            headers: {
+              "Accept-Language": "zh-CN,zh;q=0.9",
+              "User-Agent": "AutS/1.0"
+            }
           }
-        },
-        (error) => {
-          console.error("Geolocation error", error);
-          let msg = "定位失败";
-          if (error.code === 1) msg = "定位权限被拒绝";
-          else if (error.code === 2) msg = "无法获取位置信息";
-          else if (error.code === 3) msg = "定位超时";
-          
-          alert(msg);
-          setIsLocating(false);
-        },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-      );
-    } else {
-      alert("您的浏览器不支持定位功能");
+        );
+
+        if (!response.ok) throw new Error("反向地理解析失败");
+
+        const data = await response.json();
+
+        const city =
+          data.address.city ||
+          data.address.town ||
+          data.address.village ||
+          data.address.county ||
+          data.address.state ||
+          "未知城市";
+
+        handleCitySelect(city, latitude, longitude);
+      } catch (error) {
+        console.error("城市解析失败:", error);
+        alert("定位到了当前位置，但城市解析失败，请手动选择城市");
+        setShowCityPicker(true);
+      } finally {
+        setIsLocating(false);
+      }
+    },
+    (error) => {
+      console.error("定位失败:", error);
+
+      let msg = "定位失败";
+      if (error.code === 1) msg = "请允许定位权限";
+      else if (error.code === 2) msg = "无法获取位置信息";
+      else if (error.code === 3) msg = "定位超时";
+
+      alert(msg + "，请手动选择城市");
+      setShowCityPicker(true);
       setIsLocating(false);
+    },
+    {
+      enableHighAccuracy: true,
+      timeout: 15000,
+      maximumAge: 0
     }
+  );
   };
 
-  const handleCitySelect = (city: string) => {
-    setLocation(city);
-    setShowCityPicker(false);
-    // Simulate data change for different city
-    const randomData = {
-      ...MOCK_DATA[0],
-      cloudCover: Math.floor(Math.random() * 100),
-      humidity: Math.floor(Math.random() * 100),
-      windSpeed: Math.floor(Math.random() * 30),
-      transparency: Math.floor(Math.random() * 5) + 1,
-      seeing: Math.floor(Math.random() * 5) + 1,
-    };
-    setCurrentData(randomData);
-  };
+ const handleCitySelect = (
+  city: string,
+  latitude?: number,
+  longitude?: number
+) => {
+  setLocation(city);
+  setShowCityPicker(false);
+
+  const cityData = generateObservationDataByCity(city);
+  setCurrentData(cityData);
+
+  if (latitude !== undefined && longitude !== undefined) {
+    localStorage.setItem(
+      'last_location_coords',
+      JSON.stringify({ latitude, longitude })
+    );
+  }
+};
 
   const handleCustomCitySubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -369,10 +572,12 @@ const Guide: React.FC = () => {
     return 'from-red-500/20 to-transparent';
   };
 
-  const chartData = MOCK_DATA.map(d => ({
-    name: d.date,
-    score: calculateScore(d)
-  }));
+ const trendData = generateTrendDataByCity(location);
+
+const chartData = trendData.map(d => ({
+  name: d.date,
+  score: calculateScore(d)
+}));
 
   return (
     <div className="h-full overflow-y-auto p-6 space-y-8 custom-scrollbar pb-24 bg-cosmic-bg">
